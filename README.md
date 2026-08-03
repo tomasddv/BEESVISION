@@ -27,6 +27,10 @@ Los Excel se leen desde la carpeta de Drive configurada en `DRIVE_FOLDER_ID`, y 
 relevamientos de anomalies / planes de accion se guardan en la Google Sheet
 configurada en `OPERATIONS_SPREADSHEET_ID`.
 
+La app usa `dashboard-data.json` cuando esta actualizado. Si detecta que algun
+Excel/CSV de la carpeta de Drive es mas nuevo que ese JSON, reconstruye los datos
+automaticamente desde los archivos fuente.
+
 ## Archivos esperados
 
 El dashboard intenta cargar automaticamente estos archivos desde `public/data`:

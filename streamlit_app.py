@@ -229,7 +229,7 @@ def auth_credentials():
 
 
 @st.cache_data(ttl=600, show_spinner=False)
-def download_drive_files(folder_id: str) -> dict[str, bytes]:
+def download_drive_files(folder_id: str) -> dict[str, dict[str, Any]]:
     credentials = auth_credentials()
     if credentials is None or not folder_id:
         return {}
@@ -244,18 +244,50 @@ def download_drive_files(folder_id: str) -> dict[str, bytes]:
         if not re.search(r"\.(xlsx|xls|csv|json)$", name, re.I):
             continue
         request = drive.files().get_media(fileId=item["id"])
-        data[name] = request.execute()
+        data[name] = {
+            "content": request.execute(),
+            "modifiedTime": item.get("modifiedTime", ""),
+            "mimeType": item.get("mimeType", ""),
+        }
     return data
 
 
-def local_files() -> dict[str, bytes]:
+def local_files() -> dict[str, dict[str, Any]]:
     if not LOCAL_DATA_DIR.exists():
         return {}
     return {
-        path.name: path.read_bytes()
+        path.name: {
+            "content": path.read_bytes(),
+            "modifiedTime": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(),
+            "mimeType": "",
+        }
         for path in LOCAL_DATA_DIR.iterdir()
         if path.suffix.lower() in {".xlsx", ".xls", ".csv"}
     }
+
+
+def file_content(files: dict[str, Any], name: str) -> bytes:
+    item = files[name]
+    return item["content"] if isinstance(item, dict) and "content" in item else item
+
+
+def file_mtime(files: dict[str, Any], name: str) -> str:
+    item = files[name]
+    return str(item.get("modifiedTime", "")) if isinstance(item, dict) else ""
+
+
+def dashboard_json_is_fresh(files: dict[str, Any]) -> bool:
+    if "dashboard-data.json" not in files:
+        return False
+    json_time = file_mtime(files, "dashboard-data.json")
+    if not json_time:
+        return True
+    source_names = [
+        name
+        for name in files
+        if name != "dashboard-data.json" and re.search(r"\.(xlsx|xls|csv)$", name, re.I)
+    ]
+    return not any(file_mtime(files, name) > json_time for name in source_names)
 
 
 def local_compact_payload():
@@ -324,8 +356,8 @@ def read_excel_rows(name: str, content: bytes, sheet_filter: Any = None) -> list
 @st.cache_data(ttl=600, show_spinner="Leyendo datos...")
 def load_rows(folder_id: str = ""):
     files = download_drive_files(folder_id) or local_files()
-    if folder_id and "dashboard-data.json" in files:
-        compact = compact_payload_from_bytes(files["dashboard-data.json"])
+    if folder_id and dashboard_json_is_fresh(files):
+        compact = compact_payload_from_bytes(file_content(files, "dashboard-data.json"))
         if compact:
             return compact
     if not folder_id:
@@ -339,16 +371,16 @@ def load_rows(folder_id: str = ""):
 
     main_rows = []
     for name in task_files:
-        main_rows.extend(read_excel_rows(name, files[name]))
-    client_rows = read_excel_rows(client_file, files[client_file], lambda s: normalize_key(s) == "clientes") if client_file else []
+        main_rows.extend(read_excel_rows(name, file_content(files, name)))
+    client_rows = read_excel_rows(client_file, file_content(files, client_file), lambda s: normalize_key(s) == "clientes") if client_file else []
     review_rows = read_excel_rows(
         review_file,
-        files[review_file],
+        file_content(files, review_file),
         lambda s: bool(re.match(r"^(?:(?:DEL\s+)?VALLE\s+(0[3-9]|1[0-2])|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)$", s, re.I)),
     ) if review_file else []
     anomaly_rows = []
     for name in anomaly_files:
-        anomaly_rows.extend(read_excel_rows(name, files[name], lambda s: normalize_key(s) == "base"))
+        anomaly_rows.extend(read_excel_rows(name, file_content(files, name), lambda s: normalize_key(s) == "base"))
     anomaly_rows = [r for r in anomaly_rows if "delvalle" in normalize_key(first_field(r, ["distribuidor"], ""))]
     return main_rows, client_rows, review_rows, anomaly_rows, sorted(files)
 
