@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import streamlit.components.v1 as components
 from streamlit.errors import StreamlitSecretNotFoundError
 
 
@@ -534,6 +535,23 @@ def metric_card(label: str, value: Any, delta: str | None = None):
     st.metric(label, value, delta)
 
 
+def exact_dashboard_html(raw_payload: dict[str, Any]) -> str:
+    html_path = ROOT / "dashboard-local.html"
+    html = html_path.read_text(encoding="utf-8")
+    payload = json.dumps(raw_payload, ensure_ascii=False).replace("</", "<\\/")
+    replacement = f"async function loadData(){{return {payload}}}"
+    html = re.sub(r"async function loadData\(\)\{[\s\S]*?\}\s*function rawForMonth", replacement + " function rawForMonth", html, count=1)
+    html = html.replace(
+        "fetch(\"audit-notes\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({notes:auditNotesObject()})}).catch(()=>{})",
+        "Promise.resolve()",
+    )
+    html = html.replace(
+        "const r=await fetch(\"audit-notes\",{cache:\"no-store\"});",
+        "const r={ok:false,json:async()=>({})};",
+    )
+    return html
+
+
 st.title("BEES Vision")
 st.caption("Dashboard operativo con lectura desde Drive y guardado de relevamientos/PDA en Google Sheets.")
 
@@ -545,10 +563,27 @@ with st.sidebar:
         st.rerun()
 
 main_rows, client_rows, review_rows, anomaly_rows, loaded_files = load_rows(folder_id)
+raw_payload = {
+    "main": main_rows,
+    "clients": client_rows,
+    "review": review_rows,
+    "anomalies": anomaly_rows,
+    "planned": [],
+}
 tasks, reviews, anomalies = process_data(main_rows, client_rows, review_rows, anomaly_rows)
 
 if tasks.empty:
     st.warning("No se encontraron tareas. Revisar que la carpeta de Drive tenga los archivos TAREAS/data y que Streamlit tenga acceso.")
+    st.stop()
+
+with st.sidebar:
+    exact_view = st.toggle("Vista igual localhost", value=True)
+
+if exact_view:
+    components.html(exact_dashboard_html(raw_payload), height=5200, scrolling=True)
+    with st.expander("Herramientas Streamlit"):
+        st.write("Esta vista usa el mismo dashboard HTML del localhost con datos leidos desde Drive.")
+        st.write(loaded_files)
     st.stop()
 
 ops_anomaly = read_ops_sheet("Anomaly relevamientos")
