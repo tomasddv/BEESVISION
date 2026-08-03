@@ -15,6 +15,18 @@ npm run dev
 
 Luego abrir la URL que muestre Vite.
 
+## Ejecutar con Streamlit
+
+```bash
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
+
+Para Streamlit Cloud, configurar los secrets desde `.streamlit/secrets.toml.example`.
+Los Excel se leen desde la carpeta de Drive configurada en `DRIVE_FOLDER_ID`, y los
+relevamientos de anomalies / planes de accion se guardan en la Google Sheet
+configurada en `OPERATIONS_SPREADSHEET_ID`.
+
 ## Archivos esperados
 
 El dashboard intenta cargar automaticamente estos archivos desde `public/data`:

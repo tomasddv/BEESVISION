@@ -2,6 +2,8 @@
 node_modules/
 dist/
 .vite/
+__pycache__/
+outputs/
 
 # Local runtime logs
 *.log
@@ -19,6 +21,7 @@ public/data/
 # Local machine/editor files
 .env
 .env.*
+.streamlit/secrets.toml
 .DS_Store
 Thumbs.db
 .vscode/
