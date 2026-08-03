@@ -152,9 +152,14 @@ def get_secret(name: str, default: Any = "") -> Any:
 
 def auth_credentials():
     try:
-        service_account = st.secrets.get("gcp_service_account")
+        service_account_json = st.secrets.get("GOOGLE_SERVICE_ACCOUNT_JSON")
+        service_account = json.loads(service_account_json) if service_account_json else st.secrets.get("gcp_service_account")
     except (FileNotFoundError, StreamlitSecretNotFoundError):
         service_account = None
+    except json.JSONDecodeError as error:
+        st.error("El secret `GOOGLE_SERVICE_ACCOUNT_JSON` no es un JSON valido.")
+        st.caption(str(error))
+        st.stop()
     if not service_account:
         return None
     from google.oauth2.service_account import Credentials
@@ -164,9 +169,13 @@ def auth_credentials():
         "https://www.googleapis.com/auth/spreadsheets",
     ]
     service_account_info = dict(service_account)
-    private_key = str(service_account_info.get("private_key", ""))
+    private_key = str(service_account_info.get("private_key", "")).strip()
+    private_key = private_key.strip('"').strip("'")
     if "\\n" in private_key:
-        service_account_info["private_key"] = private_key.replace("\\n", "\n")
+        private_key = private_key.replace("\\n", "\n")
+    private_key = private_key.replace("BEGIN_PRIVATE_KEY", "BEGIN PRIVATE KEY")
+    private_key = private_key.replace("END_PRIVATE_KEY", "END PRIVATE KEY")
+    service_account_info["private_key"] = private_key
     try:
         return Credentials.from_service_account_info(service_account_info, scopes=scopes)
     except Exception as error:
