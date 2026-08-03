@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 import json
 import re
-import tempfile
 import unicodedata
 from datetime import datetime, timezone
 from pathlib import Path
@@ -197,6 +196,23 @@ def local_files() -> dict[str, bytes]:
     }
 
 
+def local_compact_payload():
+    file = LOCAL_DATA_DIR / "dashboard-data.json"
+    if not file.exists():
+        return None
+    try:
+        data = json.loads(file.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return (
+        data.get("main", []),
+        data.get("clients", []),
+        data.get("review", []),
+        data.get("anomalies", []),
+        ["dashboard-data.json"],
+    )
+
+
 def read_excel_rows(name: str, content: bytes, sheet_filter: Any = None) -> list[dict[str, Any]]:
     try:
         workbook = pd.ExcelFile(io.BytesIO(content))
@@ -217,7 +233,11 @@ def read_excel_rows(name: str, content: bytes, sheet_filter: Any = None) -> list
         letters = [f"__{chr(65 + i)}" if i < 26 else f"__COL{i+1}" for i in range(len(headers))]
         data.columns = [h or letters[i] for i, h in enumerate(headers)]
         for idx, row in data.iterrows():
-            item = {k: ("" if pd.isna(v) else v) for k, v in row.to_dict().items()}
+            values = ["" if pd.isna(v) else v for v in row.tolist()]
+            item = {letters[i]: values[i] for i in range(len(values))}
+            for i, header in enumerate(data.columns):
+                if not str(header).startswith("__"):
+                    item[str(header)] = values[i]
             item["__sheet"] = sheet
             item["__row"] = int(idx) + 1
             item["__sourceFile"] = name
@@ -228,6 +248,10 @@ def read_excel_rows(name: str, content: bytes, sheet_filter: Any = None) -> list
 @st.cache_data(ttl=600, show_spinner="Leyendo datos...")
 def load_rows(folder_id: str = ""):
     files = download_drive_files(folder_id) or local_files()
+    if not folder_id:
+        compact = local_compact_payload()
+        if compact:
+            return compact
     task_files = sorted([n for n in files if re.match(r"^(TAREAS\b.*|data\b.*)\.xlsx$", n, re.I)])
     client_file = next((n for n in files if n == "20260511104225plantillaClientesAR.xlsx"), "")
     review_file = next((n for n in sorted(files, reverse=True) if re.match(r"^(DEL VALLE 2026 DISTRIS - Ticket invalidas a validas final.*|Q3\.\s*2026\s+DEL VALLE - Ticket tareas.*)\.xlsx$", n, re.I)), "")
