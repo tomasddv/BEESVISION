@@ -200,7 +200,7 @@ def download_drive_files(folder_id: str) -> dict[str, bytes]:
     data: dict[str, bytes] = {}
     for item in files:
         name = item["name"]
-        if not re.search(r"\.(xlsx|xls|csv)$", name, re.I):
+        if not re.search(r"\.(xlsx|xls|csv|json)$", name, re.I):
             continue
         request = drive.files().get_media(fileId=item["id"])
         data[name] = request.execute()
@@ -223,6 +223,20 @@ def local_compact_payload():
         return None
     try:
         data = json.loads(file.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    return (
+        data.get("main", []),
+        data.get("clients", []),
+        data.get("review", []),
+        data.get("anomalies", []),
+        ["dashboard-data.json"],
+    )
+
+
+def compact_payload_from_bytes(content: bytes):
+    try:
+        data = json.loads(content.decode("utf-8"))
     except Exception:
         return None
     return (
@@ -269,6 +283,10 @@ def read_excel_rows(name: str, content: bytes, sheet_filter: Any = None) -> list
 @st.cache_data(ttl=600, show_spinner="Leyendo datos...")
 def load_rows(folder_id: str = ""):
     files = download_drive_files(folder_id) or local_files()
+    if folder_id and "dashboard-data.json" in files:
+        compact = compact_payload_from_bytes(files["dashboard-data.json"])
+        if compact:
+            return compact
     if not folder_id:
         compact = local_compact_payload()
         if compact:
