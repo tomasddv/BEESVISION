@@ -97,7 +97,17 @@ async function dashboardData(env) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    if (url.pathname === "/favicon.ico") return new Response("", { status: 204 });
+    if (url.pathname === "/favicon.ico") {
+      return new Response(
+        `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="#0f172a"/><text x="32" y="40" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" font-weight="700" fill="white">BV</text></svg>`,
+        {
+          headers: {
+            "content-type": "image/svg+xml",
+            "cache-control": "public, max-age=86400"
+          }
+        }
+      );
+    }
     if (url.pathname === "/audit-notes" && request.method === "GET") return jsonResponse({});
     if (url.pathname === "/audit-notes" && request.method === "POST") return jsonResponse({ ok: true });
     if (url.pathname === "/refresh-data") return jsonResponse({ ok: true, refreshed: false, reason: "Cloudflare lee datos desde Drive cada 5 minutos." });

@@ -56,7 +56,7 @@ SUPERVISORS = {
 }
 
 
-st.set_page_config(page_title="BEES Vision", layout="wide")
+st.set_page_config(page_title="BEES Vision", page_icon="BV", layout="wide")
 st.markdown(
     """
     <style>
