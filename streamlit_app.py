@@ -163,7 +163,19 @@ def auth_credentials():
         "https://www.googleapis.com/auth/drive.readonly",
         "https://www.googleapis.com/auth/spreadsheets",
     ]
-    return Credentials.from_service_account_info(dict(service_account), scopes=scopes)
+    service_account_info = dict(service_account)
+    private_key = str(service_account_info.get("private_key", ""))
+    if "\\n" in private_key:
+        service_account_info["private_key"] = private_key.replace("\\n", "\n")
+    try:
+        return Credentials.from_service_account_info(service_account_info, scopes=scopes)
+    except Exception as error:
+        st.error(
+            "No pude autenticar con Google. Revisar en Streamlit Secrets que "
+            "`gcp_service_account.private_key` este completa y con saltos de linea correctos."
+        )
+        st.caption(str(error))
+        st.stop()
 
 
 @st.cache_data(ttl=600, show_spinner=False)
