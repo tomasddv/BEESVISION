@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Relevamiento EDF</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>Relevamiento EDF</h1>
+        <p>Control de activos comodateados en punto de venta</p>
+      </div>
+      <button id="syncButton" class="icon-button" title="Actualizar">Actualizar</button>
+    </header>
+
+    <main>
+      <section id="setupView" class="panel">
+        <h2>Conexion</h2>
+        <p class="muted">Configurar una sola vez en cada equipo. Estos datos salen de Supabase.</p>
+        <label>Supabase URL<input id="supabaseUrl" placeholder="https://xxxx.supabase.co" /></label>
+        <label>Supabase anon key<textarea id="supabaseKey" placeholder="eyJ..."></textarea></label>
+        <label>PIN<input id="appPin" type="password" placeholder="PIN de la app" /></label>
+        <button id="saveSetup" class="primary">Guardar y entrar</button>
+      </section>
+
+      <section id="appView" class="hidden">
+        <nav class="tabs">
+          <button data-tab="survey" class="active">Relevar</button>
+          <button data-tab="report">Reporte</button>
+          <button data-tab="base">Base</button>
+        </nav>
+
+        <section id="survey" class="view">
+          <div class="panel">
+            <div class="grid three">
+              <label>Relevador<input id="userName" placeholder="Nombre" /></label>
+              <label>Codigo cliente<input id="clientCode" inputmode="numeric" placeholder="Ej: 3323" /></label>
+              <button id="searchClient" class="primary">Buscar</button>
+            </div>
+            <label>Ubicacion / zona<input id="locationText" placeholder="Opcional" /></label>
+          </div>
+          <div id="clientSummary" class="panel muted">Cargar un cliente para ver sus EDF en sistema.</div>
+          <div id="assetList"></div>
+          <div class="panel">
+            <h2>EDF adicional</h2>
+            <label>Numero fisico<input id="extraSerial" placeholder="Serie que no esta en sistema" /></label>
+            <label>Comentario<input id="extraComment" placeholder="Opcional" /></label>
+            <button id="addExtra">Agregar adicional</button>
+          </div>
+          <div class="panel">
+            <label>Comentario general<textarea id="generalNote" placeholder="Observaciones del relevamiento"></textarea></label>
+            <button id="saveSurvey" class="primary full">Guardar relevamiento</button>
+          </div>
+        </section>
+
+        <section id="report" class="view hidden">
+          <div id="stats" class="stats"></div>
+          <div class="panel">
+            <div class="grid two">
+              <label>Estado
+                <select id="statusFilter">
+                  <option value="">Todos</option>
+                  <option value="pendiente">Pendiente</option>
+                  <option value="ok">OK</option>
+                  <option value="dispersion">Dispersion</option>
+                </select>
+              </label>
+              <label>Buscar<input id="reportSearch" placeholder="Cliente, serie, comentario" /></label>
+            </div>
+          </div>
+          <div class="panel table-panel">
+            <table>
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th>Sistema</th>
+                  <th>Relevados</th>
+                  <th>OK</th>
+                  <th>Faltan</th>
+                  <th>Extra</th>
+                  <th>No OK</th>
+                  <th>Estado</th>
+                  <th>Ultimo</th>
+                </tr>
+              </thead>
+              <tbody id="reportRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="base" class="view hidden">
+          <div class="panel">
+            <h2>Importar base EDF</h2>
+            <p class="muted">Pegar el contenido de BASE_EDF.csv. Reemplaza la base del sistema.</p>
+            <textarea id="baseCsv" class="large" placeholder="clientCode,clientName,assetNumber..."></textarea>
+            <button id="importBase" class="primary">Importar base</button>
+          </div>
+          <div class="panel table-panel">
+            <table>
+              <thead><tr><th>Cliente</th><th>Serie</th><th>EDF</th><th>Estado</th></tr></thead>
+              <tbody id="baseRows"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>

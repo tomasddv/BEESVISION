@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>NPS - Planes de accion</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <h1>NPS - Planes de accion</h1>
+        <p>Comentarios, responsables y seguimiento para la mesa</p>
+      </div>
+      <button id="refreshButton">Actualizar</button>
+    </header>
+
+    <main>
+      <nav class="tabs">
+        <button data-tab="load" class="active">Cargar</button>
+        <button data-tab="report">Seguimiento</button>
+        <button data-tab="base">Base</button>
+      </nav>
+
+      <section id="load" class="view">
+        <div class="panel">
+          <div class="grid three">
+            <label>Responsable que carga<input id="userName" placeholder="Nombre" /></label>
+            <label>Codigo cliente<input id="clientCode" inputmode="numeric" placeholder="Ej: 891" /></label>
+            <button id="searchClient" class="primary">Buscar</button>
+          </div>
+          <div id="caseSummary" class="muted">Buscar un cliente para ver si tiene caso NPS cargado.</div>
+        </div>
+
+        <div class="panel">
+          <div class="grid two">
+            <label>Nombre cliente<input id="clientName" placeholder="Opcional si no esta en base" /></label>
+            <label>Promotor / responsable comercial<input id="promoter" placeholder="Opcional" /></label>
+          </div>
+          <div class="grid two">
+            <label>Motivo / causa raiz
+              <select id="rootCause">
+                <option value="">Seleccionar</option>
+                <option>Atencion comercial</option>
+                <option>Entrega / logistica</option>
+                <option>Precio / promo</option>
+                <option>Equipo de frio</option>
+                <option>Producto / stock</option>
+                <option>BEES / sistema</option>
+                <option>Otro</option>
+              </select>
+            </label>
+            <label>Estado
+              <select id="actionStatus">
+                <option>Pendiente</option>
+                <option>En progreso</option>
+                <option>Cerrado</option>
+                <option>Sin accion</option>
+              </select>
+            </label>
+          </div>
+          <label>Plan de accion<textarea id="actionPlan" placeholder="Que vamos a hacer, con que cliente y objetivo"></textarea></label>
+          <div class="grid two">
+            <label>Responsable del plan<input id="ownerName" placeholder="Quien lo sigue" /></label>
+            <label>Fecha compromiso<input id="dueDate" type="date" /></label>
+          </div>
+          <label>Comentario<textarea id="comment" placeholder="Comentario, avance o cierre"></textarea></label>
+          <button id="saveAction" class="primary full">Guardar plan / comentario</button>
+        </div>
+      </section>
+
+      <section id="report" class="view hidden">
+        <div id="stats" class="stats"></div>
+        <div class="panel">
+          <div class="grid three">
+            <label>Estado
+              <select id="statusFilter">
+                <option value="">Todos</option>
+                <option>Pendiente</option>
+                <option>En progreso</option>
+                <option>Cerrado</option>
+                <option>Sin accion</option>
+              </select>
+            </label>
+            <label>Buscar<input id="searchReport" placeholder="Cliente, responsable, comentario" /></label>
+            <button id="exportCsv">Exportar CSV</button>
+          </div>
+        </div>
+        <div class="panel table-panel">
+          <table>
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Promotor</th>
+                <th>Causa</th>
+                <th>Plan</th>
+                <th>Responsable</th>
+                <th>Compromiso</th>
+                <th>Estado</th>
+                <th>Comentario</th>
+                <th>Actualizado</th>
+              </tr>
+            </thead>
+            <tbody id="reportRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="base" class="view hidden">
+        <div class="panel">
+          <h2>Importar casos NPS</h2>
+          <p class="muted">Pegar CSV con columnas sugeridas: clientCode, clientName, promoter, zone, npsScore, reason, segment, status.</p>
+          <textarea id="baseCsv" class="large" placeholder="clientCode,clientName,promoter,zone,npsScore,reason,segment,status"></textarea>
+          <button id="importCases" class="primary">Importar base NPS</button>
+        </div>
+        <div class="panel table-panel">
+          <table>
+            <thead><tr><th>Cliente</th><th>Nombre</th><th>Promotor</th><th>NPS</th><th>Motivo</th><th>Estado</th></tr></thead>
+            <tbody id="baseRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast hidden"></div>
+    <script src="./app.js"></script>
+  </body>
+</html>

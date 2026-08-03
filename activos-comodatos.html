@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Relevamiento de activos comodateados</title>
+    <style>
+      :root{--ink:#172033;--muted:#667085;--line:#d8dee8;--bg:#f4f7fb;--ok:#047857;--bad:#be123c;--warn:#b45309;--brand:#0f766e;--blue:#1d4ed8}
+      *{box-sizing:border-box}body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--ink)}
+      header{position:sticky;top:0;z-index:5;background:#ffffffee;border-bottom:1px solid var(--line);backdrop-filter:blur(10px)}
+      .wrap{max-width:1180px;margin:auto;padding:14px} .top{display:flex;gap:10px;align-items:center;justify-content:space-between}
+      h1{font-size:20px;margin:0}.sub{font-size:12px;color:var(--muted);margin-top:3px}.tabs{display:flex;gap:8px;margin-top:12px;overflow:auto}
+      button,.btn{border:1px solid var(--line);background:white;color:var(--ink);border-radius:8px;padding:10px 12px;font-weight:800;cursor:pointer;text-decoration:none}
+      button.primary{background:var(--brand);border-color:var(--brand);color:white}button.blue{background:var(--blue);border-color:var(--blue);color:white}button.bad{background:var(--bad);border-color:var(--bad);color:white}
+      button.active{background:#172033;color:white;border-color:#172033}.grid{display:grid;gap:12px}.cols{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+      .card{background:white;border:1px solid var(--line);border-radius:8px;padding:14px}.kpi{min-height:92px}.k{font-size:12px;color:var(--muted);font-weight:900;text-transform:uppercase}.v{font-size:30px;font-weight:950;margin-top:8px}
+      label{display:grid;gap:6px;font-size:12px;color:#475467;font-weight:800}input,select,textarea{width:100%;border:1px solid #cbd5e1;border-radius:8px;padding:11px;font-size:16px;background:white;color:var(--ink)}
+      textarea{min-height:78px;resize:vertical}.asset{display:grid;gap:10px;border:1px solid #e2e8f0;border-radius:8px;padding:12px;background:#fbfdff}
+      .asset-head{display:flex;justify-content:space-between;gap:8px;align-items:start}.asset-code{font-size:18px;font-weight:950}.pill{display:inline-flex;align-items:center;border-radius:999px;padding:5px 8px;font-size:12px;font-weight:900;background:#eef2ff;color:#3730a3}
+      .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.seg button{padding:11px 6px}.seg .ok.active{background:var(--ok);border-color:var(--ok)}.seg .no.active{background:var(--bad);border-color:var(--bad)}.seg .na.active{background:var(--warn);border-color:var(--warn)}
+      table{width:100%;border-collapse:collapse;font-size:13px}th{text-align:left;color:var(--muted);font-size:11px;text-transform:uppercase}td,th{padding:9px;border-bottom:1px solid #e8edf4}.tablewrap{overflow:auto;max-height:520px}
+      .status-ok{color:var(--ok);font-weight:900}.status-bad{color:var(--bad);font-weight:900}.status-warn{color:var(--warn);font-weight:900}.hide{display:none!important}.right{text-align:right}.hint{font-size:12px;color:var(--muted);line-height:1.4}.toast{position:fixed;left:14px;right:14px;bottom:14px;background:#172033;color:white;border-radius:8px;padding:12px;z-index:20;box-shadow:0 16px 40px #0003}
+      @media(max-width:720px){.top{display:block}.wrap{padding:12px}h1{font-size:18px}.seg{grid-template-columns:1fr}.v{font-size:26px}.desktop{display:none}}
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <div class="top">
+          <div>
+            <h1>Activos comodateados</h1>
+            <div class="sub">Relevamiento de heladeras por punto de venta</div>
+          </div>
+          <a class="btn" href="/dashboard-local.html">BEES Vision</a>
+        </div>
+        <nav class="tabs">
+          <button class="active" data-view="survey">Relevar</button>
+          <button data-view="report">Reporte</button>
+          <button data-view="base">Base sistema</button>
+        </nav>
+      </div>
+    </header>
+    <main class="wrap">
+      <section id="accessBox" class="card hide" style="margin-bottom:12px">
+        <h3>Acceso al relevamiento</h3>
+        <p class="hint">Ingresá la clave compartida para cargar o consultar relevamientos.</p>
+        <div class="grid cols">
+          <label>Clave<input id="pinInput" type="password" placeholder="Clave de acceso" /></label>
+          <button class="primary" id="savePin">Entrar</button>
+        </div>
+      </section>
+      <section id="survey">
+        <div class="grid cols">
+          <label>Relevador<input id="user" placeholder="Nombre de quien releva" autocomplete="name" /></label>
+          <label>Número de cliente<input id="clientCode" inputmode="numeric" placeholder="Ej: 07054900004958" /></label>
+          <label>Ubicación / zona<input id="location" placeholder="Opcional" /></label>
+        </div>
+        <div class="grid cols" style="margin-top:12px">
+          <button class="blue" id="searchClient">Buscar cliente</button>
+          <button id="clearForm">Limpiar</button>
+        </div>
+        <div id="clientBox" class="card" style="margin-top:12px">
+          <div class="hint">Cargá un número de cliente para ver los EDF instalados en PDV según Semáforo y marcar si coinciden contra la heladera física.</div>
+        </div>
+        <div id="assetList" class="grid" style="margin-top:12px"></div>
+        <div class="card" style="margin-top:12px">
+          <h3>Activo extra encontrado</h3>
+          <div class="grid cols">
+            <label>Número de serie físico<input id="extraNumber" placeholder="Serie de EDF no cargada en sistema" /></label>
+            <label>Comentario<input id="extraComment" placeholder="Ej: está en PDV pero no figura" /></label>
+          </div>
+          <button id="addExtra" style="margin-top:10px">Agregar extra</button>
+        </div>
+        <label style="margin-top:12px">Observación general<textarea id="note" placeholder="Ej: cliente cerrado, activo sin chapa, no permitió relevar..."></textarea></label>
+        <button class="primary" id="saveSurvey" style="width:100%;margin-top:14px">Guardar relevamiento</button>
+      </section>
+      <section id="report" class="hide">
+        <div class="grid cols" id="kpis"></div>
+        <div class="card" style="margin-top:12px">
+          <div class="grid cols">
+            <label>Filtro estado<select id="statusFilter"><option value="">Todos</option><option>dispersión</option><option>pendiente</option><option>ok</option></select></label>
+            <label>Buscar<input id="reportSearch" placeholder="Cliente, relevador, nota" /></label>
+          </div>
+        </div>
+        <div class="card tablewrap" style="margin-top:12px">
+          <table>
+            <thead><tr><th>Cliente</th><th>Nombre</th><th>Sistema</th><th>Relevados</th><th>OK</th><th>Faltan</th><th>Extra</th><th>No OK</th><th>Estado</th><th>Último relevo</th><th>Relevador</th></tr></thead>
+            <tbody id="reportRows"></tbody>
+          </table>
+        </div>
+      </section>
+      <section id="base" class="hide">
+        <div class="card">
+          <h3>Base de activos del sistema</h3>
+          <p class="hint">Pegá una tabla CSV con columnas: cliente, nombre, activo, tipo, modelo, comodato, estado. También acepta separador punto y coma.</p>
+          <textarea id="csvInput" placeholder="cliente;nombre;activo;tipo;modelo;comodato;estado"></textarea>
+          <button class="primary" id="importCsv" style="margin-top:10px">Importar base</button>
+        </div>
+        <div class="card tablewrap" style="margin-top:12px">
+          <table>
+            <thead><tr><th>Cliente</th><th>Nombre</th><th>Activo</th><th>Tipo</th><th>Modelo</th><th>Comodato</th><th>Estado</th></tr></thead>
+            <tbody id="baseRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script>
+      const $=s=>document.querySelector(s), state={assets:[],report:null,currentAssets:[],checks:[],pin:localStorage.getItem('edfPin')||new URLSearchParams(location.search).get('pin')||''};
+      if(state.pin)localStorage.setItem('edfPin',state.pin);
+      const api=(url,opt={})=>fetch(url,{headers:{'Content-Type':'application/json','X-EDF-PIN':state.pin},...opt}).then(r=>r.json());
+      const clean=v=>String(v??'').trim();
+      function toast(t){const d=document.createElement('div');d.className='toast';d.textContent=t;document.body.appendChild(d);setTimeout(()=>d.remove(),2600)}
+      function setView(v){document.querySelectorAll('main>section').forEach(s=>s.classList.toggle('hide',s.id!==v));document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===v));if(v==='report')loadReport();if(v==='base')renderBase()}
+      document.querySelectorAll('[data-view]').forEach(b=>b.onclick=()=>setView(b.dataset.view));
+      function showAccess(show){accessBox.classList.toggle('hide',!show);survey.classList.toggle('hide',show)}
+      savePin.onclick=()=>{state.pin=clean(pinInput.value);localStorage.setItem('edfPin',state.pin);showAccess(false);load()}
+      async function load(){if(!state.pin){showAccess(true);return}state.assets=await api('/api/assets');if(state.assets.error){showAccess(true);toast('Clave incorrecta o faltante');return} renderBase(); await loadReport(false)}
+      function renderBase(){baseRows.innerHTML=state.assets.map(a=>`<tr><td>${a.clientCode}</td><td>${a.clientName}</td><td><b>${a.assetNumber}</b></td><td>${a.assetType}</td><td>${a.model}</td><td>${a.contract}</td><td>${a.status}</td></tr>`).join('')||`<tr><td colspan="7">Todavía no hay base cargada.</td></tr>`}
+      function findClient(){const code=clean(clientCode.value);state.currentAssets=state.assets.filter(a=>a.clientCode===code||String(Number(a.clientCode))===String(Number(code)));state.checks=state.currentAssets.map(a=>({systemNumber:a.assetNumber,foundNumber:a.assetNumber,status:'ok',comment:''}));clientBox.innerHTML=state.currentAssets.length?`<b>${state.currentAssets[0].clientName||'Cliente '+code}</b><div class="hint">${state.currentAssets.length} EDF en PDV según Semáforo</div>`:`<b>Cliente ${code}</b><div class="hint">No hay EDF en PDV cargado para este cliente. Podés cargar una serie extra encontrada.</div>`;renderAssets()}
+      function renderAssets(){assetList.innerHTML=state.checks.map((c,i)=>`<div class="asset"><div class="asset-head"><div><div class="asset-code">Serie: ${c.systemNumber||c.foundNumber}</div><div class="hint">${assetMeta(c.systemNumber)}</div></div><span class="pill">${c.status==='extra'?'Extra':c.status.toUpperCase()}</span></div><div class="seg"><button class="ok ${c.status==='ok'?'active':''}" onclick="setStatus(${i},'ok')">OK</button><button class="no ${c.status==='no_ok'?'active':''}" onclick="setStatus(${i},'no_ok')">No OK</button><button class="na ${c.status==='no_relevado'?'active':''}" onclick="setStatus(${i},'no_relevado')">No relevado</button></div><div class="grid cols"><label>Serie física<input value="${c.foundNumber||''}" onchange="state.checks[${i}].foundNumber=this.value"></label><label>Comentario / número a modificar<input value="${c.comment||''}" placeholder="Ej: en chapa figura otra serie" onchange="state.checks[${i}].comment=this.value"></label></div></div>`).join('')}
+      function assetMeta(n){const a=state.assets.find(x=>x.assetNumber===n);return a?[`EDF: ${a.model||'Sin nombre'}`,`Situación: ${a.status||'PDV'}`].filter(Boolean).join(' · '):'EDF no cargado en sistema'}
+      window.setStatus=(i,s)=>{state.checks[i].status=s;renderAssets()}
+      searchClient.onclick=findClient;
+      clearForm.onclick=()=>{clientCode.value='';location.value='';note.value='';state.currentAssets=[];state.checks=[];clientBox.innerHTML='<div class="hint">Cargá un número de cliente para ver los EDF instalados en PDV.</div>';renderAssets()}
+      addExtra.onclick=()=>{const n=clean(extraNumber.value);if(!n)return toast('Cargá el número físico del activo extra');state.checks.push({systemNumber:'',foundNumber:n,status:'extra',comment:clean(extraComment.value)});extraNumber.value='';extraComment.value='';renderAssets()}
+      saveSurvey.onclick=async()=>{const code=clean(clientCode.value);if(!code)return toast('Falta número de cliente');const res=await api('/api/surveys',{method:'POST',body:JSON.stringify({user:clean(user.value),clientCode:code,clientName:state.currentAssets[0]?.clientName||'',location:clean(location.value),note:clean(note.value),checks:state.checks})});if(res.ok){toast('Relevamiento guardado');await loadReport(false)}else toast(res.error||'No se pudo guardar')};
+      async function loadReport(show=true){state.report=await api('/api/report');if(show)renderReport();else renderReport()}
+      function renderReport(){const s=state.report?.summary||{};kpis.innerHTML=[['Clientes',s.clients],['Relevados',s.surveyed],['Con dispersión',s.dispersion],['Pendientes',s.pending],['OK',s.ok],['Activos sistema',s.systemAssets]].map(x=>`<div class="card kpi"><div class="k">${x[0]}</div><div class="v">${x[1]??0}</div></div>`).join('');const q=clean(reportSearch.value).toLowerCase(),f=statusFilter.value;const rows=(state.report?.rows||[]).filter(r=>(!f||r.status===f)&&(!q||JSON.stringify(r).toLowerCase().includes(q)));reportRows.innerHTML=rows.map(r=>`<tr><td><b>${r.clientCode}</b></td><td>${r.clientName}</td><td>${r.expected}</td><td>${r.checked}</td><td>${r.ok}</td><td>${r.missing}</td><td>${r.extra}</td><td>${r.mismatches}</td><td class="${r.status==='ok'?'status-ok':r.status==='dispersión'?'status-bad':'status-warn'}">${r.status}</td><td>${r.lastSurveyAt?new Date(r.lastSurveyAt).toLocaleString('es-AR'):''}</td><td>${r.lastSurveyBy}</td></tr>`).join('')||'<tr><td colspan="11">Sin resultados</td></tr>'}
+      statusFilter.onchange=renderReport;reportSearch.oninput=renderReport;
+      importCsv.onclick=async()=>{const txt=csvInput.value.trim();if(!txt)return toast('Pegá una base primero');const lines=txt.split(/\r?\n/).filter(Boolean),sep=lines[0].includes(';')?';':',';const headers=lines.shift().split(sep).map(h=>h.trim().toLowerCase());const at=(row,names)=>{const i=headers.findIndex(h=>names.some(n=>h.includes(n)));return i>=0?clean(row[i]):''};const assets=lines.map(l=>{const row=l.split(sep);return{clientCode:at(row,['cliente','poc']),clientName:at(row,['nombre','fantasia','razon']),assetNumber:at(row,['activo','heladera','serie','codigo']),assetType:at(row,['tipo']),model:at(row,['modelo']),contract:at(row,['comodato','repago']),status:at(row,['estado'])}}).filter(a=>a.clientCode&&a.assetNumber);const res=await api('/api/assets',{method:'POST',body:JSON.stringify({assets})});if(res.ok){toast(`Base importada: ${res.count} activos`);state.assets=await api('/api/assets');renderBase()}else toast(res.error||'No se pudo importar')};
+      load();
+    </script>
+  </body>
+</html>

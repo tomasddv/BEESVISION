@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Relevamiento EDF</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --ink: #152033;
+      --muted: #667085;
+      --line: #d9e0ea;
+      --panel: #ffffff;
+      --blue: #1264d8;
+      --green: #087443;
+      --red: #b42318;
+      --amber: #b54708;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 3;
+      background: #ffffff;
+      border-bottom: 1px solid var(--line);
+      padding: 12px 14px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 19px;
+      line-height: 1.2;
+    }
+    main { padding: 14px; max-width: 980px; margin: 0 auto; }
+    label { display: block; font-size: 12px; font-weight: 700; color: var(--muted); margin: 12px 0 5px; }
+    input, textarea, select, button {
+      width: 100%;
+      font: inherit;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      padding: 11px 12px;
+      background: #fff;
+      color: var(--ink);
+    }
+    textarea { min-height: 76px; resize: vertical; }
+    button {
+      border-color: var(--blue);
+      background: var(--blue);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #fff;
+      color: var(--blue);
+    }
+    button.ghost {
+      background: #fff;
+      color: var(--ink);
+      border-color: var(--line);
+    }
+    .tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+      margin: 12px 0 14px;
+    }
+    .tabs button {
+      padding: 9px 8px;
+      font-size: 13px;
+      background: #fff;
+      border-color: var(--line);
+      color: var(--ink);
+    }
+    .tabs button.active {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: #fff;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 13px;
+      margin: 12px 0;
+    }
+    .grid { display: grid; gap: 10px; }
+    .two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .stat { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+    .stat strong { display: block; font-size: 24px; }
+    .muted { color: var(--muted); font-size: 13px; }
+    .asset {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 10px 0;
+      background: #fff;
+    }
+    .asset-title { font-weight: 700; margin-bottom: 4px; }
+    .status-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-top: 10px; }
+    .status-row button { background: #fff; color: var(--ink); border-color: var(--line); padding: 9px 6px; font-size: 13px; }
+    .status-row button.ok.active { background: var(--green); border-color: var(--green); color: #fff; }
+    .status-row button.no_ok.active { background: var(--red); border-color: var(--red); color: #fff; }
+    .status-row button.pending.active { background: var(--amber); border-color: var(--amber); color: #fff; }
+    .hidden { display: none; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 8px 6px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; }
+    .scroll { overflow-x: auto; }
+    .toast { position: fixed; left: 14px; right: 14px; bottom: 14px; background: #152033; color: #fff; padding: 12px; border-radius: 8px; display: none; z-index: 10; }
+    @media (min-width: 760px) {
+      .stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .grid.desktop-three { grid-template-columns: 1fr 1fr auto; align-items: end; }
+      .grid.desktop-three button { margin-top: 29px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Relevamiento EDF</h1>
+    <div class="muted" id="headerMeta">Base cloud</div>
+  </header>
+
+  <main>
+    <section id="pinView" class="panel">
+      <label for="pinInput">PIN</label>
+      <input id="pinInput" type="password" autocomplete="current-password" placeholder="Ingresar PIN">
+      <button style="margin-top:12px" onclick="enterPin()">Entrar</button>
+    </section>
+
+    <section id="appView" class="hidden">
+      <div class="tabs">
+        <button id="tabSurvey" class="active" onclick="showTab('survey')">Relevar</button>
+        <button id="tabReport" onclick="showTab('report')">Reporte</button>
+        <button id="tabBase" onclick="showTab('base')">Base</button>
+      </div>
+
+      <section id="surveyView">
+        <div class="panel">
+          <div class="grid desktop-three">
+            <div>
+              <label for="userInput">Relevador</label>
+              <input id="userInput" placeholder="Nombre">
+            </div>
+            <div>
+              <label for="clientInput">Codigo de cliente</label>
+              <input id="clientInput" inputmode="numeric" placeholder="Ej: 3323">
+            </div>
+            <button onclick="searchClient()">Buscar</button>
+          </div>
+          <label for="locationInput">Ubicacion / PDV</label>
+          <input id="locationInput" placeholder="Opcional">
+        </div>
+
+        <div id="clientResult"></div>
+
+        <div id="savePanel" class="panel hidden">
+          <label for="noteInput">Comentario general</label>
+          <textarea id="noteInput" placeholder="Notas del relevamiento"></textarea>
+          <button onclick="saveCurrent()">Guardar relevamiento</button>
+        </div>
+      </section>
+
+      <section id="reportView" class="hidden">
+        <div class="stats" id="stats"></div>
+        <div class="panel">
+          <div class="grid two">
+            <input id="reportFilter" placeholder="Filtrar cliente, serie o comentario" oninput="renderReport()">
+            <button class="secondary" onclick="refreshReport()">Actualizar</button>
+          </div>
+        </div>
+        <div class="panel scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>EDF</th>
+                <th>Sistema</th>
+                <th>Fisico</th>
+                <th>Estado</th>
+                <th>Comentario</th>
+                <th>Fecha</th>
+              </tr>
+            </thead>
+            <tbody id="reportRows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="baseView" class="hidden">
+        <div class="panel">
+          <p class="muted">Pegar el contenido de <b>BASE_EDF.csv</b> para cargar o reemplazar la base del sistema.</p>
+          <label for="csvInput">CSV base EDF</label>
+          <textarea id="csvInput" style="min-height:180px" placeholder="clientCode,clientName,assetNumber..."></textarea>
+          <button style="margin-top:10px" onclick="importCsv()">Importar base</button>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <div id="toast" class="toast"></div>
+
+  <script>
+    const state = {
+      pin: localStorage.getItem('edfCloudPin') || '',
+      assets: [],
+      report: null,
+      currentClient: null,
+      currentChecks: []
+    };
+
+    document.getElementById('pinInput').value = state.pin;
+    if (state.pin) enterPin();
+
+    function enterPin() {
+      state.pin = document.getElementById('pinInput').value.trim();
+      localStorage.setItem('edfCloudPin', state.pin);
+      toast('Cargando base...');
+      google.script.run
+        .withSuccessHandler(data => {
+          state.assets = data.assets || [];
+          state.report = data.report || null;
+          document.getElementById('pinView').classList.add('hidden');
+          document.getElementById('appView').classList.remove('hidden');
+          document.getElementById('headerMeta').textContent = `${state.assets.length} EDF en PDV`;
+          renderStats();
+          toast('Listo');
+        })
+        .withFailureHandler(showError)
+        .loadApp(state.pin);
+    }
+
+    function showTab(tab) {
+      ['survey', 'report', 'base'].forEach(name => {
+        document.getElementById(`${name}View`).classList.toggle('hidden', name !== tab);
+        document.getElementById(`tab${capitalize(name)}`).classList.toggle('active', name === tab);
+      });
+      if (tab === 'report') renderReport();
+    }
+
+    function searchClient() {
+      const code = normalizeCode(document.getElementById('clientInput').value);
+      const found = state.assets.filter(asset => normalizeCode(asset.clientCode) === code);
+      state.currentClient = code;
+      state.currentChecks = found.map(asset => ({
+        systemNumber: asset.assetNumber || '',
+        foundNumber: asset.assetNumber || '',
+        status: 'pending',
+        comment: '',
+        model: asset.model || ''
+      }));
+      renderClient(found);
+    }
+
+    function renderClient(assets) {
+      const box = document.getElementById('clientResult');
+      const code = state.currentClient || '';
+      if (!assets.length) {
+        box.innerHTML = `
+          <div class="panel">
+            <div class="asset-title">Cliente ${escapeHtml(code)}</div>
+            <p class="muted">No aparecen EDF en PDV para este cliente. Podés cargar uno adicional si encontraste una heladera.</p>
+            ${extraAssetHtml()}
+          </div>`;
+        document.getElementById('savePanel').classList.remove('hidden');
+        return;
+      }
+      box.innerHTML = `
+        <div class="panel">
+          <div class="asset-title">Cliente ${escapeHtml(code)}</div>
+          <div class="muted">${assets.length} EDF cargado(s) en sistema</div>
+        </div>
+        ${assets.map((asset, index) => assetHtml(asset, index)).join('')}
+        <div class="panel">${extraAssetHtml()}</div>`;
+      document.getElementById('savePanel').classList.remove('hidden');
+    }
+
+    function assetHtml(asset, index) {
+      return `
+        <div class="asset">
+          <div class="asset-title">${escapeHtml(asset.model || 'EDF')}</div>
+          <div class="muted">Serie sistema: ${escapeHtml(asset.assetNumber || '')}</div>
+          <label>Numero fisico visto</label>
+          <input value="${escapeAttr(asset.assetNumber || '')}" oninput="state.currentChecks[${index}].foundNumber=this.value">
+          <div class="status-row">
+            <button class="ok" onclick="setStatus(${index}, 'ok', this)">OK</button>
+            <button class="no_ok" onclick="setStatus(${index}, 'no_ok', this)">No OK</button>
+            <button class="pending active" onclick="setStatus(${index}, 'pending', this)">No relevado</button>
+          </div>
+          <label>Comentario / numero a modificar</label>
+          <input placeholder="Ej: serie correcta, falta baja, cambio de PDV" oninput="state.currentChecks[${index}].comment=this.value">
+        </div>`;
+    }
+
+    function extraAssetHtml() {
+      return `
+        <div class="asset-title">EDF adicional encontrado</div>
+        <label>Numero fisico adicional</label>
+        <input id="extraNumber" placeholder="Serie que no esta en sistema">
+        <label>Comentario adicional</label>
+        <input id="extraComment" placeholder="Opcional">`;
+    }
+
+    function setStatus(index, status, btn) {
+      state.currentChecks[index].status = status;
+      btn.parentElement.querySelectorAll('button').forEach(item => item.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    function saveCurrent() {
+      const extraNumber = document.getElementById('extraNumber') ? document.getElementById('extraNumber').value.trim() : '';
+      const extraComment = document.getElementById('extraComment') ? document.getElementById('extraComment').value.trim() : '';
+      const checks = state.currentChecks.slice();
+      if (extraNumber) checks.push({ systemNumber: '', foundNumber: extraNumber, status: 'extra', comment: extraComment });
+
+      const payload = {
+        user: document.getElementById('userInput').value.trim(),
+        clientCode: state.currentClient,
+        clientName: '',
+        location: document.getElementById('locationInput').value.trim(),
+        note: document.getElementById('noteInput').value.trim(),
+        checks: checks
+      };
+
+      toast('Guardando...');
+      google.script.run
+        .withSuccessHandler(() => {
+          toast('Relevamiento guardado');
+          document.getElementById('noteInput').value = '';
+          refreshReport();
+        })
+        .withFailureHandler(showError)
+        .saveSurvey(state.pin, payload);
+    }
+
+    function refreshReport() {
+      google.script.run
+        .withSuccessHandler(data => {
+          state.report = data.report;
+          renderStats();
+          renderReport();
+          toast('Reporte actualizado');
+        })
+        .withFailureHandler(showError)
+        .getReport(state.pin);
+    }
+
+    function renderStats() {
+      const r = state.report || {};
+      document.getElementById('stats').innerHTML = [
+        ['EDF sistema', r.totalAssets || 0],
+        ['Clientes', r.totalClients || 0],
+        ['Relevados', r.surveyedClients || 0],
+        ['Dispersos', r.noOk || 0]
+      ].map(([label, value]) => `<div class="stat"><strong>${value}</strong><span class="muted">${label}</span></div>`).join('');
+    }
+
+    function renderReport() {
+      const filter = (document.getElementById('reportFilter').value || '').toLowerCase();
+      const rows = ((state.report && state.report.rows) || []).filter(row => {
+        return JSON.stringify(row).toLowerCase().includes(filter);
+      });
+      document.getElementById('reportRows').innerHTML = rows.slice(0, 500).map(row => `
+        <tr>
+          <td>${escapeHtml(row.clientCode)}</td>
+          <td>${escapeHtml(row.model)}</td>
+          <td>${escapeHtml(row.systemNumber)}</td>
+          <td>${escapeHtml(row.foundNumber)}</td>
+          <td>${statusLabel(row.status)}</td>
+          <td>${escapeHtml(row.comment)}</td>
+          <td>${escapeHtml(formatDate(row.lastSurveyAt))}</td>
+        </tr>`).join('');
+    }
+
+    function importCsv() {
+      const rows = parseCsv(document.getElementById('csvInput').value);
+      if (!rows.length) return toast('No hay filas para importar');
+      toast('Importando base...');
+      google.script.run
+        .withSuccessHandler(result => {
+          toast(`Base importada: ${result.imported} EDF`);
+          enterPin();
+        })
+        .withFailureHandler(showError)
+        .importBase(state.pin, rows);
+    }
+
+    function parseCsv(text) {
+      const matrix = [];
+      let row = [];
+      let cell = '';
+      let quoted = false;
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const next = text[i + 1];
+        if (char === '"' && quoted && next === '"') {
+          cell += '"';
+          i++;
+        } else if (char === '"') {
+          quoted = !quoted;
+        } else if (char === ',' && !quoted) {
+          row.push(cell);
+          cell = '';
+        } else if ((char === '\n' || char === '\r') && !quoted) {
+          if (char === '\r' && next === '\n') i++;
+          row.push(cell);
+          if (row.some(value => value.trim())) matrix.push(row);
+          row = [];
+          cell = '';
+        } else {
+          cell += char;
+        }
+      }
+      row.push(cell);
+      if (row.some(value => value.trim())) matrix.push(row);
+      const headers = matrix.shift() || [];
+      return matrix.map(values => {
+        const obj = {};
+        headers.forEach((header, index) => obj[header] = values[index] || '');
+        return obj;
+      });
+    }
+
+    function statusLabel(status) {
+      const labels = { ok: 'OK', no_ok: 'No OK', pending: 'No relevado', sin_relevar: 'Sin relevar', extra: 'Adicional' };
+      return labels[status] || status || '';
+    }
+
+    function showError(error) {
+      toast(error && error.message ? error.message : String(error));
+    }
+
+    function toast(message) {
+      const el = document.getElementById('toast');
+      el.textContent = message;
+      el.style.display = 'block';
+      clearTimeout(window.toastTimer);
+      window.toastTimer = setTimeout(() => el.style.display = 'none', 3000);
+    }
+
+    function normalizeCode(value) {
+      return String(value || '').trim().replace(/^0+/, '') || String(value || '').trim();
+    }
+
+    function capitalize(value) {
+      return value.charAt(0).toUpperCase() + value.slice(1);
+    }
+
+    function formatDate(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? value : date.toLocaleString('es-AR');
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      })[char]);
+    }
+
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/`/g, '&#96;');
+    }
+  </script>
+</body>
+</html>

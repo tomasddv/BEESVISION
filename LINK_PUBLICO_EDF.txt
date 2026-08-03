@@ -1,0 +1,11 @@
+App relevamiento EDF:
+https://juan-tumor-phones-demand.trycloudflare.com/activos-comodatos.html?pin=galaxia2026
+
+Clave:
+galaxia2026
+
+Notas:
+- La PC debe quedar encendida.
+- El servidor local node server.mjs debe seguir corriendo.
+- El proceso cloudflared debe seguir corriendo.
+- Este link de trycloudflare es temporal y puede cambiar si se reinicia el tunel.

@@ -1,0 +1,25 @@
+# Dependencies and build outputs
+node_modules/
+dist/
+.vite/
+
+# Local runtime logs
+*.log
+cloudflared-*.err
+cloudflared-*.out
+
+# Generated and source data files with operational/customer information
+public/data/
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.json.gz
+
+# Local machine/editor files
+.env
+.env.*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
