@@ -57,6 +57,18 @@ SUPERVISORS = {
 
 
 st.set_page_config(page_title="BEES Vision", layout="wide")
+st.markdown(
+    """
+    <style>
+      .block-container { padding: 0 !important; max-width: 100% !important; }
+      header[data-testid="stHeader"], div[data-testid="stToolbar"], footer { display: none !important; }
+      section[data-testid="stSidebar"] { border-right: 1px solid #dbe3ed; }
+      iframe { border: 0 !important; display: block; background: transparent; }
+      div[data-testid="stElementContainer"]:has(iframe) { margin: 0 !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 def normalize_key(value: Any = "") -> str:
@@ -567,12 +579,51 @@ def metric_card(label: str, value: Any, delta: str | None = None):
     st.metric(label, value, delta)
 
 
-def exact_dashboard_html(raw_payload: dict[str, Any]) -> str:
+def audit_key(promoter: Any, task: Any, pillar: Any) -> str:
+    return f"audit-{normalize_key(promoter)}-{normalize_key(task)}-{normalize_key(pillar)}"
+
+
+def audit_notes_from_sheet(rows: pd.DataFrame) -> dict[str, str]:
+    if rows.empty:
+        return {}
+    notes: dict[str, str] = {}
+    for _, row in rows.iterrows():
+        key = audit_key(row.get("promotor", ""), row.get("tarea", ""), row.get("pilar", ""))
+        if key == "audit--":
+            key = normalize_text(row.get("id", ""))
+        if not key:
+            continue
+        notes[key] = json.dumps(
+            {
+                "type": normalize_text(row.get("accion", "")),
+                "note": normalize_text(row.get("comentario", "")),
+            },
+            ensure_ascii=False,
+        )
+    return notes
+
+
+def exact_dashboard_html(raw_payload: dict[str, Any], audit_notes: dict[str, str] | None = None) -> str:
     html_path = ROOT / "dashboard-local.html"
     html = html_path.read_text(encoding="utf-8")
     payload = json.dumps(raw_payload, ensure_ascii=False).replace("</", "<\\/")
+    notes_payload = json.dumps(audit_notes or {}, ensure_ascii=False).replace("</", "<\\/")
     replacement = f"async function loadData(){{return {payload}}}"
     html = re.sub(r"async function loadData\(\)\{[\s\S]*?\}\s*function rawForMonth", replacement + " function rawForMonth", html, count=1)
+    html = re.sub(
+        r"async function syncAuditNotes\(\)\{[\s\S]*?\}\s*function saveAuditEntry",
+        f"async function syncAuditNotes(){{const notes={notes_payload};Object.entries(notes||{{}}).forEach(([k,v])=>localStorage.setItem(k,v));}} function saveAuditEntry",
+        html,
+        count=1,
+    )
+    html = html.replace(
+        'function saveAuditEntry(key,type,note){localStorage.setItem(key,JSON.stringify({type:nt(type),note:nt(note)}));persistAuditNotes();render()}',
+        'function saveAuditEntry(key,type,note){localStorage.setItem(key,JSON.stringify({type:nt(type),note:nt(note)}));const p=new URLSearchParams({save_audit:"1",key,type:nt(type),note:nt(note)});window.parent.location.search=p.toString();render()}',
+    )
+    html = html.replace(
+        'oninput="const e=auditEntry(this.dataset.note);localStorage.setItem(this.dataset.note,JSON.stringify({type:e.type,note:this.value}));persistAuditNotes()"',
+        'onchange="const e=auditEntry(this.dataset.note);saveAuditEntry(this.dataset.note,e.type,this.value)"',
+    )
     html = html.replace(
         "fetch(\"audit-notes\",{method:\"POST\",headers:{\"Content-Type\":\"application/json\"},body:JSON.stringify({notes:auditNotesObject()})}).catch(()=>{})",
         "Promise.resolve()",
@@ -608,18 +659,57 @@ if tasks.empty:
     st.warning("No se encontraron tareas. Revisar que la carpeta de Drive tenga los archivos TAREAS/data y que Streamlit tenga acceso.")
     st.stop()
 
+ops_anomaly = read_ops_sheet("Anomaly relevamientos")
+ops_pda = read_ops_sheet("Planes de accion")
+
+if st.query_params.get("save_audit") == "1":
+    key = normalize_text(st.query_params.get("key", ""))
+    action = normalize_text(st.query_params.get("type", ""))
+    note = normalize_text(st.query_params.get("note", ""))
+    candidates = pd.concat(
+        [
+            tasks[["monthKey", "promoter", "pillar", "task", "clientCode", "image"]].copy(),
+            anomalies.rename(columns={"monthKey": "monthKey", "promoter": "promoter", "pillar": "pillar", "task": "task", "image": "image"})[
+                ["monthKey", "promoter", "pillar", "task", "image"]
+            ].assign(clientCode=""),
+        ],
+        ignore_index=True,
+    )
+    candidates["auditKey"] = candidates.apply(lambda row: audit_key(row.get("promoter", ""), row.get("task", ""), row.get("pillar", "")), axis=1)
+    match = candidates[candidates["auditKey"] == key].head(1)
+    row = match.iloc[0].to_dict() if not match.empty else {}
+    saved = append_sheet_row(
+        "Anomaly relevamientos",
+        [
+            key or f"anom-{datetime.now(timezone.utc).timestamp()}",
+            datetime.now().strftime("%Y-%m-%d %H:%M"),
+            row.get("monthKey", ""),
+            row.get("promoter", ""),
+            row.get("pillar", ""),
+            row.get("task", key),
+            row.get("clientCode", ""),
+            row.get("image", ""),
+            action,
+            note,
+            "",
+            "ABIERTO",
+        ],
+    )
+    st.cache_data.clear()
+    st.query_params.clear()
+    if saved:
+        st.toast("Motivo de anomaly guardado.")
+    st.rerun()
+
 with st.sidebar:
     exact_view = st.toggle("Vista igual localhost", value=True)
 
 if exact_view:
-    components.html(exact_dashboard_html(raw_payload), height=5200, scrolling=True)
+    components.html(exact_dashboard_html(raw_payload, audit_notes_from_sheet(ops_anomaly)), height=6800, scrolling=False)
     with st.expander("Herramientas Streamlit"):
         st.write("Esta vista usa el mismo dashboard HTML del localhost con datos leidos desde Drive.")
         st.write(loaded_files)
     st.stop()
-
-ops_anomaly = read_ops_sheet("Anomaly relevamientos")
-ops_pda = read_ops_sheet("Planes de accion")
 
 months = sorted(tasks["monthKey"].dropna().unique())
 with st.sidebar:
