@@ -18,6 +18,7 @@
     "lucide-react": "^0.468.0"
   },
   "devDependencies": {
+    "wrangler": "^4.28.1",
     "tailwindcss": "^3.4.17",
     "postcss": "^8.4.49",
     "autoprefixer": "^10.4.20"

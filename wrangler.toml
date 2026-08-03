@@ -1,0 +1,8 @@
+name = "beesvision"
+main = "cloudflare-worker.js"
+compatibility_date = "2026-08-03"
+workers_dev = true
+
+rules = [
+  { type = "Text", globs = ["**/*.html"], fallthrough = true }
+]

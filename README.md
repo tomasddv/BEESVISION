@@ -31,6 +31,13 @@ La app usa `dashboard-data.json` cuando esta actualizado. Si detecta que algun
 Excel/CSV de la carpeta de Drive es mas nuevo que ese JSON, reconstruye los datos
 automaticamente desde los archivos fuente.
 
+## Cloudflare
+
+Cloudflare Workers sirve `dashboard-local.html` como app web real y expone
+`/data/dashboard-data.json` leyendo el archivo de Drive con la cuenta de servicio.
+Configurar el secret `GOOGLE_SERVICE_ACCOUNT_JSON` en Cloudflare con el JSON
+completo de Google.
+
 ## Archivos esperados
 
 El dashboard intenta cargar automaticamente estos archivos desde `public/data`:
