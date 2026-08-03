@@ -31,6 +31,28 @@ MONTH_NAMES = {
     "noviembre": "2026-11",
     "diciembre": "2026-12",
 }
+SUPERVISORS = {
+    "BRUNO ISMAEL": [
+        "NICASTRO LUCAS",
+        "POCHETINO NICOLAS",
+        "SIRI MARTIN",
+        "GARCIA MATIAS",
+        "VILLAGRA ENZO",
+        "FUENTEALBA MAURICIO",
+        "JARAMILLO JORDAN",
+        "FABRE GASTON",
+    ],
+    "CASCO HERNAN": [
+        "MENDEZ CARLOS",
+        "FIELG FERNANDO",
+        "ALVAREZ PABLO",
+        "ROJAS ALEXANDER",
+        "GIMENEZ JUAN MANUEL",
+        "MORENI LUCIANO",
+        "HERRERA MARIANO",
+    ],
+    "VITI ANIBAL": ["FEDERICO BISS"],
+}
 
 
 st.set_page_config(page_title="BEES Vision", layout="wide")
@@ -40,6 +62,13 @@ def normalize_key(value: Any = "") -> str:
     text = unicodedata.normalize("NFD", str(value or ""))
     text = "".join(ch for ch in text if unicodedata.category(ch) != "Mn")
     return re.sub(r"[^a-z0-9]+", "", text.lower())
+
+
+PROMOTER_SUPERVISOR = {
+    normalize_key(promoter): supervisor
+    for supervisor, promoters in SUPERVISORS.items()
+    for promoter in promoters
+}
 
 
 def normalize_text(value: Any = "") -> str:
@@ -141,6 +170,17 @@ def image_tokens(value: Any) -> set[str]:
     last = re.split(r"[\\/]", without_protocol)[-1]
     photo = re.search(r"photo_[a-z0-9-]+", without_protocol)
     return {item for item in [without_protocol, last, photo.group(0) if photo else ""] if item}
+
+
+def supervisor_for(promoter: Any, fallback: Any = "") -> str:
+    return PROMOTER_SUPERVISOR.get(normalize_key(promoter), normalize_text(fallback) or "Sin supervisor")
+
+
+def task_weight(task: Any, valid_value: Any) -> int:
+    text = normalize_key(task)
+    if "x2" in text or to_number(valid_value) >= 2:
+        return 2
+    return 1
 
 
 def get_secret(name: str, default: Any = "") -> Any:
@@ -349,19 +389,26 @@ def process_data(main_rows, client_rows, review_rows, anomaly_rows):
         client_code = normalize_text(first_field(row, ["codigo cliente", "cod cliente", "poc id", "idcliente"], "__I"))
         image = first_field(row, ["Imagen", "photo_image_url", "link imagen", "image url", "image", "foto", "url"])
         anomaly = next((anomaly_index[t] for t in image_tokens(image) if t in anomaly_index), None)
-        valid = 1 if to_number(row.get("Validada", row.get("__P", 0))) >= 1 else 0
+        raw_valid = to_number(row.get("Validada", row.get("__P", 0)))
+        weight = task_weight(first_field(row, ["nombre tarea", "tarea", "detalle tarea", "task"], "__N"), raw_valid)
+        valid = int(max(0, raw_valid))
         date_value = first_field(row, ["fecha", "fecha ejecucion", "fecha visita", "created at", "date"], "__A")
         task = normalize_text(first_field(row, ["nombre tarea", "tarea", "detalle tarea", "task"], "__N")) or "Sin tarea"
+        promoter = normalize_text(first_field(row, ["promotor", "promoter"], "__G")) or "Sin promotor"
+        justification = normalize_text(first_field(row, ["justificacion", "justificación", "motivo justificacion", "motivo justificación"], "__Q"))
         tasks.append(
             {
                 "clientCode": client_code,
                 "clientName": clients.get(client_code, {}).get("clientName", ""),
-                "supervisor": clients.get(client_code, {}).get("supervisor", ""),
-                "promoter": normalize_text(first_field(row, ["promotor", "promoter"], "__G")) or "Sin promotor",
+                "supervisor": supervisor_for(promoter, clients.get(client_code, {}).get("supervisor", "")),
+                "promoter": promoter,
                 "task": task,
+                "weight": weight,
                 "pillar": pillar,
                 "valid": valid,
-                "invalid": 0 if valid else 1,
+                "invalid": 0 if valid else weight,
+                "justification": justification,
+                "justified": bool(justification) and "sinjustificacion" not in normalize_key(justification),
                 "dateKey": date_key(date_value),
                 "monthKey": month_key(date_value, row.get("__sheet", ""), row.get("__sourceFile", "")),
                 "image": image,
@@ -386,9 +433,13 @@ def process_data(main_rows, client_rows, review_rows, anomaly_rows):
         reviews.append(
             {
                 "promoter": normalize_text(first_field(row, ["PROMOTOR", "promotor"])) or "Sin promotor",
+                "supervisor": supervisor_for(first_field(row, ["PROMOTOR", "promotor"])),
+                "client": normalize_text(first_field(row, ["Cliente", "POC ID", "poc id"])),
+                "pocId": normalize_text(first_field(row, ["POC ID", "poc id"])),
                 "task": normalize_text(first_field(row, ["DETALLE TAREA", "detalle tarea", "tarea"])) or "Sin tarea",
                 "dateKey": date_key(date_value),
                 "monthKey": month_key(date_value, row.get("__sheet", ""), row.get("__sourceFile", "")),
+                "image": first_field(row, ["IMAGEN", "Imagen", "FOTO", "Foto", "photo_image_url", "link imagen", "foto"]),
                 "comment": comment,
                 "reviewed": "Si" if comment_key else "No",
                 "result": result,
@@ -415,6 +466,74 @@ def append_sheet_row(sheet_name: str, row: list[Any]) -> bool:
     return True
 
 
+@st.cache_data(ttl=120, show_spinner=False)
+def read_ops_sheet(sheet_name: str) -> pd.DataFrame:
+    spreadsheet_id = get_secret("OPERATIONS_SPREADSHEET_ID", "")
+    credentials = auth_credentials()
+    if not spreadsheet_id or credentials is None:
+        return pd.DataFrame()
+    import gspread
+
+    client = gspread.authorize(credentials)
+    values = client.open_by_key(spreadsheet_id).worksheet(sheet_name).get_all_records()
+    return pd.DataFrame(values)
+
+
+def filtered_frame(df: pd.DataFrame, filters: dict[str, str]) -> pd.DataFrame:
+    out = df.copy()
+    for field, value in filters.items():
+        if not value or value == "Todos" or field not in out:
+            continue
+        if field == "autoservicios":
+            out = out[out["task"].map(lambda x: "programadeautoservicios" in normalize_key(x))]
+        else:
+            out = out[out[field] == value]
+    return out
+
+
+def calc_counts(df: pd.DataFrame) -> dict[str, Any]:
+    if df.empty:
+        return {"total": 0, "valid": 0, "invalid": 0, "validation": 0.0}
+    valid = int(df["valid"].sum())
+    invalid = int(df["invalid"].sum())
+    total = valid + invalid
+    return {"total": total, "valid": valid, "invalid": invalid, "validation": valid / total if total else 0.0}
+
+
+def top_tasks(df: pd.DataFrame, metric: str, limit: int = 5) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(columns=["task", "pillar", "count"])
+    rows = (
+        df.groupby(["task", "pillar"], as_index=False)
+        .agg(count=(metric, "sum"), anomalies=("anomaly", "sum"))
+        .sort_values("count", ascending=False)
+        .head(limit)
+    )
+    return rows[rows["count"] > 0]
+
+
+def comparable_day(df: pd.DataFrame) -> tuple[dict[str, Any], dict[str, Any], float]:
+    if df.empty or "dateKey" not in df:
+        return {}, {}, 0.0
+    by_day = []
+    for date, rows in df[df["dateKey"].astype(bool)].groupby("dateKey"):
+        counts = calc_counts(rows)
+        if counts["total"]:
+            by_day.append({"date": date, **counts})
+    by_day = sorted(by_day, key=lambda row: row["date"])
+    if len(by_day) < 2:
+        return (by_day[-1] if by_day else {}), {}, 0.0
+    return by_day[-1], by_day[-2], by_day[-1]["validation"] - by_day[-2]["validation"]
+
+
+def format_int(value: Any) -> str:
+    return f"{int(value):,}".replace(",", ".")
+
+
+def metric_card(label: str, value: Any, delta: str | None = None):
+    st.metric(label, value, delta)
+
+
 st.title("BEES Vision")
 st.caption("Dashboard operativo con lectura desde Drive y guardado de relevamientos/PDA en Google Sheets.")
 
@@ -432,38 +551,94 @@ if tasks.empty:
     st.warning("No se encontraron tareas. Revisar que la carpeta de Drive tenga los archivos TAREAS/data y que Streamlit tenga acceso.")
     st.stop()
 
+ops_anomaly = read_ops_sheet("Anomaly relevamientos")
+ops_pda = read_ops_sheet("Planes de accion")
+
 months = sorted(tasks["monthKey"].dropna().unique())
 with st.sidebar:
     month = st.selectbox("Mes", ["Todos"] + months, index=len(months) if months else 0)
     pillar = st.selectbox("Pilar", ["Todos"] + sorted(tasks["pillar"].dropna().unique()))
     promoter = st.selectbox("Promotor", ["Todos"] + sorted(tasks["promoter"].dropna().unique()))
+    supervisor = st.selectbox("Supervisor", ["Todos"] + sorted(tasks["supervisor"].dropna().unique()))
+    task_filter = st.selectbox("Tarea", ["Todos"] + sorted(tasks["task"].dropna().unique()))
+    autoservicios = st.checkbox("Solo programa de autoservicios")
 
-filtered = tasks.copy()
+filters = {
+    "monthKey": month,
+    "pillar": pillar,
+    "promoter": promoter,
+    "supervisor": supervisor,
+    "task": task_filter,
+}
+filtered = filtered_frame(tasks, filters)
+if autoservicios:
+    filtered = filtered_frame(filtered, {"autoservicios": "Programa de autoservicios"})
+filtered_reviews = filtered_frame(reviews, {"monthKey": month, "promoter": promoter, "supervisor": supervisor, "task": task_filter})
+filtered_anomalies = anomalies.copy()
 if month != "Todos":
-    filtered = filtered[filtered["monthKey"] == month]
-if pillar != "Todos":
-    filtered = filtered[filtered["pillar"] == pillar]
-if promoter != "Todos":
-    filtered = filtered[filtered["promoter"] == promoter]
+    filtered_anomalies = filtered_anomalies[filtered_anomalies["monthKey"] == month]
+if pillar != "Todos" and "pillar" in filtered_anomalies:
+    filtered_anomalies = filtered_anomalies[filtered_anomalies["pillar"] == pillar]
+if promoter != "Todos" and "promoter" in filtered_anomalies:
+    filtered_anomalies = filtered_anomalies[filtered_anomalies["promoter"] == promoter]
 
-valid = int(filtered["valid"].sum())
-total = len(filtered)
-invalid = total - valid
-validation = valid / total if total else 0
-anomaly_total = int(filtered["anomaly"].sum()) if "anomaly" in filtered else 0
+counts = calc_counts(filtered)
+cols = st.columns(6)
+with cols[0]:
+    metric_card("% Validacion", pct(counts["validation"]), f"{(counts['validation'] - TARGET_VALIDATION) * 100:.1f} pp")
+with cols[1]:
+    metric_card("Tareas", format_int(counts["total"]))
+with cols[2]:
+    metric_card("Validas", format_int(counts["valid"]))
+with cols[3]:
+    metric_card("Invalidas", format_int(counts["invalid"]))
+with cols[4]:
+    metric_card("Anomalies", format_int(len(filtered_anomalies)))
+with cols[5]:
+    metric_card("Tickets revisados", format_int((filtered_reviews["reviewed"] == "Si").sum() if not filtered_reviews.empty else 0))
 
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Tareas", f"{total:,}".replace(",", "."))
-c2.metric("Validas", f"{valid:,}".replace(",", "."), pct(validation))
-c3.metric("Invalidas", f"{invalid:,}".replace(",", "."))
-c4.metric("Anomalies", f"{anomaly_total:,}".replace(",", "."))
+st.subheader("Links importantes")
+link_cols = st.columns(2)
+with link_cols[0]:
+    st.link_button("Excel ticket invalidas/validas", "https://docs.google.com/spreadsheets/d/1hnGKNUmNhcKt6LRyjB5BoDvTE7yCg9533-TEwtNrOy4/edit?pli=1&gid=1668551916#gid=1668551916")
+with link_cols[1]:
+    st.link_button("Power BI BEES Vision", "https://app.powerbi.com/groups/a7489b7a-e2d1-402a-a29e-f2d77f893b4e/reports/9deec9ee-08d4-4e33-9527-671a0d6cf643/4cc7e957ccf92587c0de?ctid=cef04b19-7776-4a94-b89b-375c77a8f936&experience=power-bi&clientSideAuth=0")
 
-monthly = tasks.groupby("monthKey", as_index=False).agg(validas=("valid", "sum"), invalidas=("invalid", "sum"), anomalies=("anomaly", "sum"))
+st.subheader("Acumulado anual")
+monthly = tasks.groupby("monthKey", as_index=False).agg(validas=("valid", "sum"), invalidas=("invalid", "sum"), justificadas=("justified", "sum"), anomalies=("anomaly", "sum"))
 monthly["total"] = monthly["validas"] + monthly["invalidas"]
 monthly["validacion"] = monthly["validas"] / monthly["total"]
-st.subheader("Acumulado anual")
-fig = px.bar(monthly, x="monthKey", y=["validas", "invalidas", "anomalies"], barmode="group", color_discrete_map={"validas": "#0F9D76", "invalidas": "#E11D48", "anomalies": "#D97706"})
-st.plotly_chart(fig, use_container_width=True)
+annual_cols = st.columns(2)
+with annual_cols[0]:
+    st.plotly_chart(
+        px.bar(
+            monthly,
+            x="monthKey",
+            y=["validas", "invalidas", "justificadas"],
+            barmode="group",
+            color_discrete_map={"validas": "#0F9D76", "invalidas": "#E11D48", "justificadas": "#D97706"},
+        ),
+        use_container_width=True,
+    )
+with annual_cols[1]:
+    st.plotly_chart(px.line(monthly, x="monthKey", y="validacion", markers=True), use_container_width=True)
+
+st.subheader("Justificaciones")
+justified = filtered[filtered["justified"]] if "justified" in filtered else pd.DataFrame()
+jcols = st.columns(2)
+jcols[0].metric("% justificadas", pct(len(justified) / len(filtered) if len(filtered) else 0))
+jcols[1].metric("Tareas justificadas", format_int(len(justified)))
+if not justified.empty:
+    top_just = justified.groupby("justification", as_index=False).size().sort_values("size", ascending=False).head(5)
+    st.dataframe(top_just.rename(columns={"justification": "Justificacion", "size": "Veces"}), use_container_width=True, hide_index=True)
+
+st.subheader("Validacion vs dia comparable")
+current_day, previous_day, delta = comparable_day(filtered)
+day_cols = st.columns(4)
+day_cols[0].metric("Ultimo dia", pct(current_day.get("validation", 0)), current_day.get("date", "Sin fecha"))
+day_cols[1].metric("Dia comparable", pct(previous_day.get("validation", 0)), previous_day.get("date", "Sin fecha"))
+day_cols[2].metric("Variacion", f"{delta * 100:.1f} pp")
+day_cols[3].metric("Invalidas ultimo dia", format_int(current_day.get("invalid", 0)))
 
 st.subheader("Punto 3 - Oportunidades por pilar")
 by_pillar = filtered.groupby("pillar", as_index=False).agg(validas=("valid", "sum"), invalidas=("invalid", "sum"), anomalies=("anomaly", "sum"))
@@ -496,15 +671,64 @@ if not lowest.empty and float(lowest.iloc[0]["validacion"]) < TARGET_VALIDATION:
                     "",
                 ],
             )
+            st.cache_data.clear()
             st.success("PDA guardado en Google Sheets." if saved else "PDA registrado en pantalla. Configurar Google Secrets para guardarlo en Sheets.")
 
-st.subheader("Anomalies y relevamientos")
-anom_month = anomalies if month == "Todos" else anomalies[anomalies["monthKey"] == month]
-type_count = anom_month.groupby("type", as_index=False).size().sort_values("size", ascending=False) if not anom_month.empty else pd.DataFrame(columns=["type", "size"])
-st.plotly_chart(px.bar(type_count, x="type", y="size", color="type"), use_container_width=True)
+task_cols = st.columns(2)
+with task_cols[0]:
+    st.subheader("Top 5 tareas invalidas")
+    st.plotly_chart(px.bar(top_tasks(filtered, "invalid"), x="task", y="count", color="pillar"), use_container_width=True)
+with task_cols[1]:
+    st.subheader("Top 5 tareas validadas")
+    st.plotly_chart(px.bar(top_tasks(filtered, "valid"), x="task", y="count", color="pillar"), use_container_width=True)
 
-if not anom_month.empty:
-    for idx, row in anom_month.head(20).iterrows():
+st.subheader("Clientes criticos")
+if not filtered.empty:
+    client_rows = filtered.groupby(["clientCode", "clientName"], as_index=False).agg(validas=("valid", "sum"), invalidas=("invalid", "sum"), anomalies=("anomaly", "sum"))
+    client_rows["total"] = client_rows["validas"] + client_rows["invalidas"]
+    client_rows["validacion"] = client_rows["validas"] / client_rows["total"]
+    st.dataframe(client_rows.sort_values(["validacion", "total"], ascending=[True, False]).head(25), use_container_width=True, hide_index=True)
+
+st.subheader("Punto 4 - Revision invalidas a validas")
+review_cols = st.columns(5)
+review_cols[0].metric("Total revision", format_int(len(filtered_reviews)))
+review_cols[1].metric("Revisadas", format_int((filtered_reviews["reviewed"] == "Si").sum() if not filtered_reviews.empty else 0))
+review_cols[2].metric("Pendientes", format_int((filtered_reviews["reviewed"] != "Si").sum() if not filtered_reviews.empty else 0))
+review_cols[3].metric("Fallas algoritmo", format_int((filtered_reviews["result"] == "Valida por falla algoritmo").sum() if not filtered_reviews.empty else 0))
+review_cols[4].metric("Invalidas confirmadas", format_int((filtered_reviews["result"] == "Invalida confirmada").sum() if not filtered_reviews.empty else 0))
+if not filtered_reviews.empty:
+    alg_top = filtered_reviews[filtered_reviews["result"] == "Valida por falla algoritmo"].groupby("task", as_index=False).size().sort_values("size", ascending=False).head(5)
+    st.subheader("Top 5 tareas con fallas de algoritmo")
+    st.dataframe(alg_top.rename(columns={"task": "Tarea", "size": "Veces"}), use_container_width=True, hide_index=True)
+    st.dataframe(filtered_reviews.head(300), use_container_width=True, hide_index=True)
+
+st.subheader("Control y analisis de anomalies")
+ops_month = ops_anomaly.copy()
+if not ops_month.empty and month != "Todos" and "mes" in ops_month:
+    ops_month = ops_month[ops_month["mes"] == month]
+
+if not ops_month.empty and "accion" in ops_month:
+    action_count = ops_month.groupby("accion", as_index=False).size().sort_values("size", ascending=False)
+else:
+    action_count = filtered_anomalies.groupby("type", as_index=False).size().sort_values("size", ascending=False) if not filtered_anomalies.empty else pd.DataFrame(columns=["type", "size"])
+    action_count = action_count.rename(columns={"type": "accion"})
+
+an_cols = st.columns(2)
+with an_cols[0]:
+    st.plotly_chart(px.pie(action_count, values="size", names="accion", hole=0.55), use_container_width=True)
+with an_cols[1]:
+    if not action_count.empty:
+        st.dataframe(action_count.rename(columns={"accion": "Accion", "size": "Veces"}), use_container_width=True, hide_index=True)
+
+if not ops_month.empty and "accion" in ops_month:
+    error_top = ops_month[ops_month["accion"].map(lambda x: normalize_key(x) == normalize_key("ERROR DE ALGORITMO"))]
+    if not error_top.empty:
+        st.subheader("Top 5 tareas con error de algoritmo")
+        st.dataframe(error_top.groupby("tarea", as_index=False).size().sort_values("size", ascending=False).head(5).rename(columns={"tarea": "Tarea", "size": "Veces"}), use_container_width=True, hide_index=True)
+
+st.subheader("Fotos de anomalies para relevar")
+if not filtered_anomalies.empty:
+    for idx, row in filtered_anomalies.head(30).iterrows():
         with st.expander(f"{row.get('promoter', 'Sin promotor')} - {row.get('task', 'Sin tarea')}"):
             if row.get("image"):
                 st.link_button("Abrir foto", str(row["image"]))
@@ -529,7 +753,11 @@ if not anom_month.empty:
                             "ABIERTO",
                         ],
                     )
+                    st.cache_data.clear()
                     st.success("Relevamiento guardado en Google Sheets." if saved else "Configurar Google Secrets para guardar en Sheets.")
+
+with st.expander("PDA guardados"):
+    st.dataframe(ops_pda, use_container_width=True, hide_index=True)
 
 with st.expander("Archivos cargados"):
     st.write(loaded_files)
