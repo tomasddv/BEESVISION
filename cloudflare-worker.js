@@ -35,8 +35,13 @@ function pemToArrayBuffer(pem) {
 }
 
 async function serviceAccountToken(env) {
-  if (!env.GOOGLE_SERVICE_ACCOUNT_JSON) throw new Error("Falta GOOGLE_SERVICE_ACCOUNT_JSON en Cloudflare secrets.");
-  const info = JSON.parse(env.GOOGLE_SERVICE_ACCOUNT_JSON);
+  const serviceAccountJson =
+    env.GOOGLE_SERVICE_ACCOUNT_JSON ||
+    Array.from({ length: 20 }, (_, index) => env[`GOOGLE_SERVICE_ACCOUNT_JSON_${index + 1}`] || "").join("");
+  if (!serviceAccountJson) {
+    throw new Error("Falta GOOGLE_SERVICE_ACCOUNT_JSON o GOOGLE_SERVICE_ACCOUNT_JSON_1..N en Cloudflare secrets.");
+  }
+  const info = JSON.parse(serviceAccountJson);
   const now = Math.floor(Date.now() / 1000);
   const header = { alg: "RS256", typ: "JWT" };
   const claim = {
