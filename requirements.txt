@@ -1,7 +1,10 @@
-streamlit>=1.37
-pandas>=2.2
-openpyxl>=3.1
-plotly>=5.22
+streamlit==1.58.0
+pandas==3.0.3
+numpy==2.4.6
+openpyxl==3.1.5
+plotly==6.7.0
 google-api-python-client>=2.140
 google-auth>=2.32
 gspread>=6.1
+starlette==1.2.1
+uvicorn==0.48.0
